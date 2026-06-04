@@ -2,3 +2,4 @@ boto3>=1.35.0
 finnhub-python>=2.4.20
 python-dotenv>=1.0.0
 pytest>=8.3.0
+websocket-client>=1.8.0
