@@ -53,6 +53,11 @@ ORDER BY anomaly_count DESC;
 -- keeps everything); micro-batch boundaries don't align perfectly to minutes.
 -- diff_pct > 5% → investigate.
 
+-- The WHERE filters do two things:
+--   (a) isolate the current overlapping session (so old non-overlapping runs
+--       from earlier hours don't pollute the join), and
+--   (b) PRUNE bronze partitions (year/month/day) → far less data scanned = cheaper.
+-- Adjust the date to your run day. Partition values are Hive strings ('6', not 6).
 WITH batch_vwap AS (
     SELECT ticker,
            DATE_TRUNC('minute', event_time) AS minute,
@@ -60,6 +65,7 @@ WITH batch_vwap AS (
            SUM(quantity) AS batch_volume,
            COUNT(*)      AS batch_trades
     FROM stock_streaming_db.bronze_raw_trades
+    WHERE year = '2026' AND month = '6' AND day = '6'   -- partition pruning + today only
     GROUP BY ticker, DATE_TRUNC('minute', event_time)
 ),
 streaming_vwap AS (
@@ -69,6 +75,7 @@ streaming_vwap AS (
            total_volume AS stream_volume,
            trade_count  AS stream_trades
     FROM stock_streaming_db.silver_vwap_1min
+    WHERE window_start >= TIMESTAMP '2026-06-06 00:00:00'   -- today's windows only
 )
 SELECT b.ticker,
        b.minute,
