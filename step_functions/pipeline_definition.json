@@ -1,0 +1,146 @@
+{
+  "Comment": "Stock Streaming Pipeline — Full Production Orchestrator (Project 05). Author: Janvi Chitroda. Checks infrastructure, runs all 4 medallion Glue jobs in parallel, refreshes the catalog with crawlers, validates data quality via Athena, and notifies on success or failure. AWS-native equivalent of the Dagster asset graph in Project 03. Orchestrates the PROCESSING layer only — Kinesis must exist and the producer must already be feeding it.",
+  "StartAt": "Author_Janvi_Chitroda",
+  "States": {
+    "Author_Janvi_Chitroda": {
+      "Type": "Pass",
+      "Comment": "No-op marker state — shows authorship in the visual graph. Flows straight into CheckInfrastructure.",
+      "Next": "CheckInfrastructure"
+    },
+    "CheckInfrastructure": {
+      "Type": "Task",
+      "Comment": "Fail fast: verify Kinesis is ACTIVE + S3 reachable BEFORE spending on Glue.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "stock-infra-check",
+        "Payload": {}
+      },
+      "ResultPath": "$.infraCheck",
+      "Next": "ProcessStreams",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "ProcessStreams": {
+      "Type": "Parallel",
+      "Comment": "Fan out to all 4 Glue streaming jobs at once. glue:startJobRun.sync blocks each branch until its job ends, so this state finishes only when all 4 do.",
+      "Branches": [
+        {
+          "StartAt": "BronzeLayer",
+          "States": {
+            "BronzeLayer": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": { "JobName": "stock-bronze-raw-trades" },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Silver1MinVWAP",
+          "States": {
+            "Silver1MinVWAP": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": { "JobName": "stock-silver-vwap" },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "Silver5MinVWAP",
+          "States": {
+            "Silver5MinVWAP": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": { "JobName": "stock-silver-vwap-5min" },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "GoldAnomalyDetection",
+          "States": {
+            "GoldAnomalyDetection": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::glue:startJobRun.sync",
+              "Parameters": { "JobName": "stock-gold-anomaly" },
+              "End": true
+            }
+          }
+        }
+      ],
+      "ResultPath": "$.glueResults",
+      "Next": "RunCrawlers",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "RunCrawlers": {
+      "Type": "Task",
+      "Comment": "Refresh the Glue Data Catalog (all 4 crawlers) so Athena/DQ see new data + partitions.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "stock-run-crawlers",
+        "Payload": {}
+      },
+      "ResultPath": "$.crawlerResults",
+      "Next": "DataQualityChecks",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "DataQualityChecks": {
+      "Type": "Task",
+      "Comment": "Run 7 automated DQ checks via Athena — the Lambda raises if any violations, which routes here to NotifyFailure.",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "stock-data-quality",
+        "Payload": {}
+      },
+      "ResultPath": "$.dqResults",
+      "Next": "NotifySuccess",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "ResultPath": "$.error",
+          "Next": "NotifyFailure"
+        }
+      ]
+    },
+    "NotifySuccess": {
+      "Type": "Task",
+      "Comment": "Everything passed — publish a success summary to SNS (same topic as the anomaly Lambda).",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:366447947905:stock-anomaly-alerts",
+        "Subject": "✅ Stock Pipeline — Complete Success",
+        "Message": "Full pipeline execution completed successfully:\n\n1. ✅ Infrastructure check passed\n2. ✅ All 4 Glue jobs completed (Bronze, Silver 1min, Silver 5min, Gold)\n3. ✅ All 4 crawlers updated the Data Catalog\n4. ✅ All 7 DQ checks passed — zero violations\n\nQuery latest data in Athena (db = stock_streaming_db)."
+      },
+      "End": true
+    },
+    "NotifyFailure": {
+      "Type": "Task",
+      "Comment": "Any state's Catch lands here. States.Format injects the caught error ($.error) into the SNS message.",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:366447947905:stock-anomaly-alerts",
+        "Subject": "❌ Stock Pipeline FAILED",
+        "Message.$": "States.Format('Pipeline failed at a step. Check CloudWatch logs for details.\n\nError: {}', $.error)"
+      },
+      "End": true
+    }
+  }
+}
