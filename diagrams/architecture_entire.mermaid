@@ -1,0 +1,90 @@
+graph TB
+    subgraph Producer["🖥️ Trade Producer (Python)"]
+        SIM["Simulated Mode<br/>25 tickers, 20 eps"]
+        FIN["Finnhub WebSocket<br/>Live market data"]
+    end
+
+    subgraph Kinesis["📡 Kinesis Data Streams"]
+        STREAM["stock-trades-stream<br/>1 shard, 24h retention"]
+    end
+
+    subgraph StepFunctions["🔄 Step Functions Orchestrator"]
+        INFRA["CheckInfrastructure<br/>(Lambda)"]
+        PARALLEL["ProcessStreams<br/>(Parallel)"]
+        CRAWLERS["RunCrawlers<br/>(Lambda)"]
+        DQ["DataQualityChecks<br/>(Lambda)"]
+        SUCCESS["NotifySuccess<br/>(SNS)"]
+        FAILURE["NotifyFailure<br/>(SNS)"]
+        
+        INFRA --> PARALLEL
+        PARALLEL --> CRAWLERS
+        CRAWLERS --> DQ
+        DQ --> SUCCESS
+        INFRA -.->|error| FAILURE
+        PARALLEL -.->|error| FAILURE
+        CRAWLERS -.->|error| FAILURE
+        DQ -.->|error| FAILURE
+    end
+
+    subgraph Glue["⚡ AWS Glue Streaming (PySpark)"]
+        BRONZE["Bronze Layer<br/>Raw trades → Parquet<br/>Partitioned: year/month/day/ticker"]
+        SILVER1["Silver 1-Min VWAP<br/>Tumbling windows + watermarks<br/>VWAP, volume, buy_ratio"]
+        SILVER5["Silver 5-Min VWAP<br/>Trend analysis<br/>Smoother aggregations"]
+        GOLD["Gold Anomaly Detection<br/>foreachBatch self-join<br/>±1% threshold"]
+    end
+
+    subgraph S3["📦 Amazon S3 (Data Lake)"]
+        B_S3["bronze/raw_trades/"]
+        S1_S3["silver/vwap_1min/"]
+        S5_S3["silver/vwap_5min/"]
+        G_S3["gold/anomaly_alerts/"]
+    end
+
+    subgraph Catalog["📋 Glue Data Catalog"]
+        T1["bronze_raw_trades"]
+        T2["silver_vwap_1min"]
+        T3["silver_vwap_5min"]
+        T4["gold_anomaly_alerts"]
+    end
+
+    subgraph Analytics["📊 Analytics Layer"]
+        ATHENA["Amazon Athena<br/>SQL queries on S3"]
+        CW["CloudWatch Dashboard<br/>Pipeline health metrics"]
+    end
+
+    subgraph Alerting["🚨 Event-Driven Alerts"]
+        LAMBDA_ALERT["Lambda: anomaly-notifier<br/>S3 trigger → read Parquet"]
+        SNS["SNS Topic<br/>stock-anomaly-alerts"]
+        EMAIL["📧 Email Alert"]
+    end
+
+    SIM --> STREAM
+    FIN --> STREAM
+    STREAM --> BRONZE
+    STREAM --> SILVER1
+    STREAM --> SILVER5
+    STREAM --> GOLD
+    BRONZE --> B_S3
+    SILVER1 --> S1_S3
+    SILVER5 --> S5_S3
+    GOLD --> G_S3
+    B_S3 --> T1
+    S1_S3 --> T2
+    S5_S3 --> T3
+    G_S3 --> T4
+    T1 --> ATHENA
+    T2 --> ATHENA
+    T3 --> ATHENA
+    T4 --> ATHENA
+    G_S3 -->|S3 PutObject| LAMBDA_ALERT
+    LAMBDA_ALERT --> SNS
+    SNS --> EMAIL
+
+    style Producer fill:#e1f5fe
+    style Kinesis fill:#fff3e0
+    style Glue fill:#f3e5f5
+    style S3 fill:#e8f5e9
+    style Catalog fill:#fce4ec
+    style Analytics fill:#e0f2f1
+    style Alerting fill:#fff8e1
+    style StepFunctions fill:#f5f5f5

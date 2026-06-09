@@ -1,0 +1,27 @@
+graph TB
+    subgraph StepFunctions["🔄 Step Functions Orchestrator"]
+        INFRA["CheckInfrastructure<br/>(Lambda)"]
+        PARALLEL["ProcessStreams<br/>(Parallel)"]
+        CRAWLERS["RunCrawlers<br/>(Lambda)"]
+        DQ["DataQualityChecks<br/>(Lambda)"]
+        SUCCESS["NotifySuccess<br/>(SNS)"]
+        FAILURE["NotifyFailure<br/>(SNS)"]
+        
+        INFRA --> PARALLEL
+        PARALLEL --> CRAWLERS
+        CRAWLERS --> DQ
+        DQ --> SUCCESS
+        INFRA -.->|error| FAILURE
+        PARALLEL -.->|error| FAILURE
+        CRAWLERS -.->|error| FAILURE
+        DQ -.->|error| FAILURE
+    end
+
+    
+
+    style INFRA fill:#e1f5fe
+    style PARALLEL fill:#fff3e0
+    style SUCCESS fill:#fce4ec
+    style FAILURE fill:#e0f2f1
+    style CRAWLERS fill:#fff8e1
+    style DQ fill:#f5f5f5
