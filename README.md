@@ -116,6 +116,23 @@ S3 PutObject trigger on `gold/anomaly_alerts/`. Reads Parquet with pandas, summa
 ### Step Functions (`step_functions/pipeline_definition.json`)
 Full production orchestrator: CheckInfrastructure (Lambda) → ProcessStreams (4 parallel Glue jobs) → RunCrawlers (Lambda) → DataQualityChecks (Lambda) → NotifySuccess/Failure (SNS). Every step has error catching with failure notification.
 
+### Monitoring (`docs/cloudwatch_dashboard.md`)
+A CloudWatch dashboard (`StockStreamingPipeline`) gives single-page pipeline health from AWS built-in metrics — no custom instrumentation in the jobs. Seven widgets cover **Kinesis** (incoming records/bytes — is data flowing? near the shard limit?), **Glue** (resource usage across all 4 jobs), and **Lambda** (invocations, errors, duration for all 4 functions). Combined with SNS email alerts (anomalies + Step Functions success/failure) and CloudWatch logs for per-batch detail, this provides layered observability across the pipeline.
+
+---
+
+## Monitoring & Observability
+
+Three complementary layers:
+
+| Layer | Mechanism | Surfaces |
+|---|---|---|
+| **At-a-glance health** | CloudWatch dashboard (`docs/cloudwatch_dashboard.md`) | Kinesis throughput, Glue resource usage, Lambda invocations/errors/duration |
+| **Event alerts** | Lambda + SNS email | Anomaly summaries (per-ticker), Step Functions success/failure |
+| **Deep investigation** | CloudWatch Logs (`/aws-glue/jobs/output`) | Per-batch record counts, sample rows, stack traces |
+
+The dashboard is built from **built-in AWS metrics** — Kinesis, Glue, and Lambda emit these automatically, so monitoring required no changes to the streaming jobs.
+
 ---
 
 ## AWS Services Used
