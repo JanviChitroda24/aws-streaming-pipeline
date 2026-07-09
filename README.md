@@ -4,7 +4,7 @@
 
 **Stack:** Kinesis → Glue Streaming (PySpark) → S3 (Parquet) → Athena → Lambda → SNS → Step Functions
 
-**Companion project:** [Kafka + Spark Streaming Pipeline](https://github.com/JanviChitroda24/kafka-spark-streaming) — same domain, same logic, local infrastructure. This project translates those skills to AWS-native services.
+**Companion project:** [Kafka + Spark Streaming Pipeline](https://github.com/JanviChitroda24/kafka-spark-streaming), same domain, same logic, local infrastructure. This project translates those skills to AWS-native services.
 
 ---
 
@@ -49,7 +49,7 @@
 
 ## Why This Project Exists
 
-I built a [Kafka + Spark Streaming pipeline](https://github.com/JanviChitroda24/kafka-spark-streaming) using local infrastructure (Redpanda, Spark, Delta Lake, Dagster). This project rebuilds the same pipeline on AWS to demonstrate that I can translate data engineering skills across platforms. The business logic is identical — what changes is the infrastructure layer.
+I built a [Kafka + Spark Streaming pipeline](https://github.com/JanviChitroda24/kafka-spark-streaming) using local infrastructure (Redpanda, Spark, Delta Lake, Dagster). This project rebuilds the same pipeline on AWS to demonstrate that I can translate data engineering skills across platforms. The business logic is identical; what changes is the infrastructure layer.
 
 ### Kafka → AWS Migration Map
 
@@ -60,17 +60,17 @@ I built a [Kafka + Spark Streaming pipeline](https://github.com/JanviChitroda24/
 | Delta Lake on local disk | S3 Parquet + Glue Catalog | No ACID transactions, but serverless SQL via Athena |
 | Dagster orchestration | Step Functions state machine | Visual workflow, native AWS integration, pay-per-transition |
 | Console output alerts | Lambda + SNS email alerts | Event-driven, zero-polling, automatic triggers |
-| Manual DQ in notebooks | Automated Athena DQ in Lambda | Pipeline fails if DQ checks fail — no silent bad data |
+| Manual DQ in notebooks | Automated Athena DQ in Lambda | Pipeline fails if DQ checks fail, no silent bad data |
 
 ---
 
 ## Key Metrics Computed
 
 **VWAP (Volume-Weighted Average Price)** at two granularities:
-- **1-minute windows** — real-time monitoring, anomaly detection baseline
-- **5-minute windows** — trend analysis, institutional trading benchmark
+- **1-minute windows**: real-time monitoring, anomaly detection baseline
+- **5-minute windows**: trend analysis, institutional trading benchmark
 
-**VWAP Formula:** `sum(price × quantity) / sum(quantity)` — weights trades by volume so large institutional trades have proportionally more influence than small retail trades.
+**VWAP Formula:** `sum(price × quantity) / sum(quantity)`. This weights trades by volume so large institutional trades have proportionally more influence than small retail trades.
 
 **Anomaly Detection:** Flags trades where price deviates >1% from the per-ticker batch average. Detected within 30 seconds of the trade occurring.
 
@@ -82,14 +82,14 @@ I built a [Kafka + Spark Streaming pipeline](https://github.com/JanviChitroda24/
 
 | Test | Result | Method |
 |---|---|---|
-| Batch reconciliation | **0.0% diff** across ALL rows | Recomputed VWAP from bronze via batch GROUP BY, joined with streaming silver — identical to 4 decimal places |
+| Batch reconciliation | **0.0% diff** across ALL rows | Recomputed VWAP from bronze via batch GROUP BY, joined with streaming silver, identical to 4 decimal places |
 | Duplicate check | **0 duplicates** | `GROUP BY trade_id HAVING COUNT(*) > 1` returns empty |
 | Data quality (7 checks) | **0 violations** | null_trade_id, null_ticker, negative_price, zero_quantity, invalid_side, null_timestamp, duplicate_ids |
 | Pipeline latency | **~11.76 seconds** avg | Measured as `ingested_at - event_time` across all bronze records |
 | Anomaly detection | **~2-5%** of trades flagged | Consistent with ±0.2% simulator noise vs 1% threshold |
 | Step Functions orchestration | **All steps green** | Infra check → 4 parallel Glue jobs → crawlers → DQ → success notification |
 
-The batch reconciliation result (0.0% difference) is the strongest validation — it proves the streaming VWAP formula, watermark handling, and data completeness are mathematically correct.
+The batch reconciliation result (0.0% difference) is the strongest validation. It proves the streaming VWAP formula, watermark handling, and data completeness are mathematically correct.
 
 ---
 
@@ -101,14 +101,14 @@ Dual-mode trade producer: simulated random-walk pricing for 25 mega-cap tickers,
 ### Bronze Layer (`glue_jobs/bronze_raw_trades.py`)
 Reads from Kinesis, parses JSON with dynamic column detection (handles Glue version differences), adds `event_time` + `ingested_at` timestamps, partitions by `year/month/day/ticker`, writes to S3 as Parquet.
 
-### Silver Layer — 1-Min VWAP (`glue_jobs/silver_vwap.py`)
+### Silver Layer: 1-Min VWAP (`glue_jobs/silver_vwap.py`)
 Computes VWAP over 1-minute tumbling windows per ticker with 10-second watermarks for late data handling. Outputs: window_start, window_end, ticker, vwap, total_volume, trade_count, low_price, high_price, buy_ratio, source.
 
-### Silver Layer — 5-Min VWAP (`glue_jobs/silver_vwap_5min.py`)
+### Silver Layer: 5-Min VWAP (`glue_jobs/silver_vwap_5min.py`)
 Identical computation with 5-minute windows. ~5x more trades per window for smoother trend analysis.
 
-### Gold Layer — Anomaly Detection (`glue_jobs/gold_anomaly.py`)
-Uses foreachBatch self-join: computes per-ticker average within each 30-second micro-batch, joins back to individual trades, flags deviations >1%. Only anomalies written to S3 — massive data reduction.
+### Gold Layer: Anomaly Detection (`glue_jobs/gold_anomaly.py`)
+Uses foreachBatch self-join: computes per-ticker average within each 30-second micro-batch, joins back to individual trades, flags deviations >1%. Only anomalies written to S3, a massive data reduction.
 
 ### Lambda Alerts (`lambda/anomaly_notifier.py`)
 S3 PutObject trigger on `gold/anomaly_alerts/`. Reads Parquet with pandas, summarizes per ticker, publishes to SNS. Email delivered within 2-5 seconds of file creation.
@@ -117,7 +117,7 @@ S3 PutObject trigger on `gold/anomaly_alerts/`. Reads Parquet with pandas, summa
 Full production orchestrator: CheckInfrastructure (Lambda) → ProcessStreams (4 parallel Glue jobs) → RunCrawlers (Lambda) → DataQualityChecks (Lambda) → NotifySuccess/Failure (SNS). Every step has error catching with failure notification.
 
 ### Monitoring (`docs/cloudwatch_dashboard.md`)
-A CloudWatch dashboard (`StockStreamingPipeline`) gives single-page pipeline health from AWS built-in metrics — no custom instrumentation in the jobs. Seven widgets cover **Kinesis** (incoming records/bytes — is data flowing? near the shard limit?), **Glue** (resource usage across all 4 jobs), and **Lambda** (invocations, errors, duration for all 4 functions). Combined with SNS email alerts (anomalies + Step Functions success/failure) and CloudWatch logs for per-batch detail, this provides layered observability across the pipeline.
+A CloudWatch dashboard (`StockStreamingPipeline`) gives single-page pipeline health from AWS built-in metrics, with no custom instrumentation in the jobs. Seven widgets cover **Kinesis** (incoming records/bytes: is data flowing? near the shard limit?), **Glue** (resource usage across all 4 jobs), and **Lambda** (invocations, errors, duration for all 4 functions). Combined with SNS email alerts (anomalies + Step Functions success/failure) and CloudWatch logs for per-batch detail, this provides layered observability across the pipeline.
 
 ---
 
@@ -131,7 +131,7 @@ Three complementary layers:
 | **Event alerts** | Lambda + SNS email | Anomaly summaries (per-ticker), Step Functions success/failure |
 | **Deep investigation** | CloudWatch Logs (`/aws-glue/jobs/output`) | Per-batch record counts, sample rows, stack traces |
 
-The dashboard is built from **built-in AWS metrics** — Kinesis, Glue, and Lambda emit these automatically, so monitoring required no changes to the streaming jobs.
+The dashboard is built from **built-in AWS metrics**. Kinesis, Glue, and Lambda emit these automatically, so monitoring required no changes to the streaming jobs.
 
 ---
 
@@ -206,7 +206,7 @@ aws-streaming-pipeline/
 - AWS CLI configured with `kinesis-producer-user` credentials
 - Python 3.11+ with boto3, finnhub-python
 
-### Quick Start (Step Functions — one command)
+### Quick Start (Step Functions, one command)
 
 ```bash
 # 1. Create Kinesis stream
@@ -223,15 +223,15 @@ aws stepfunctions start-execution \
   --state-machine-arn arn:aws:states:us-east-1:366447947905:stateMachine:stock-streaming-pipeline \
   --region us-east-1
 
-# 5. Watch execution in Step Functions console — all steps should turn green
-# 6. Check email for "✅ Stock Pipeline — Complete Success" notification
+# 5. Watch execution in Step Functions console, all steps should turn green
+# 6. Check email for "✅ Stock Pipeline: Complete Success" notification
 # 7. Query results in Athena (database: stock_streaming_db)
 
 # 8. Cleanup
 aws kinesis delete-stream --stream-name stock-trades-stream --region us-east-1
 ```
 
-> **Note:** the 4 Glue jobs run with a **15-minute timeout** while `awaitTermination` is 10 minutes — the job stops itself gracefully (status `SUCCEEDED`) before the timeout kill switch, which is what lets Step Functions proceed past `ProcessStreams`. See `step_functions/DEPLOY_RUNBOOK.md`.
+> **Note:** the 4 Glue jobs run with a **15-minute timeout** while `awaitTermination` is 10 minutes. The job stops itself gracefully (status `SUCCEEDED`) before the timeout kill switch, which is what lets Step Functions proceed past `ProcessStreams`. See `step_functions/DEPLOY_RUNBOOK.md`.
 
 ### Manual Run (individual jobs)
 
@@ -260,6 +260,11 @@ aws glue start-job-run --job-name stock-gold-anomaly --region us-east-1
 | S3 Parquet over Delta Lake | Native Athena support, no extra dependencies | Delta Lake on S3 (ACID but needs Spark for reads) |
 | Glue Catalog over Hive Metastore | Managed, integrates with Athena/Glue natively | Standalone Hive (more control, operational overhead) |
 | Glue timeout 15 min > awaitTermination 10 min | Job stops gracefully (`SUCCEEDED`) before the kill switch, so Step Functions proceeds | Timeout = awaitTermination (job killed as `TIMEOUT` = orchestrator failure) |
+
+---
+
+## License
+All rights reserved. See [LICENSE](LICENSE) for usage terms.
 
 ---
 
