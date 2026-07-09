@@ -269,4 +269,3 @@ All rights reserved. See [LICENSE](LICENSE) for usage terms.
 ---
 
 *Built by Janvi Chitroda · MS Information Systems, Northeastern University*
-*Portfolio Project 05 · Companion: [Kafka + Spark Streaming Pipeline](https://github.com/JanviChitroda24/kafka-spark-streaming)*
