@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 anomaly_notifier.py — Lambda: S3 event → read anomaly Parquet → SNS email alert.
 

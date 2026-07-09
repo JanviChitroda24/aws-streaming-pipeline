@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 gold_anomaly.py — Glue Streaming: Kinesis → Gold Anomaly Alerts.
 

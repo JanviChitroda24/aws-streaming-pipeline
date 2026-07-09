@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 producer.py — Kinesis trade producer (simulated + Finnhub dual-mode).
 

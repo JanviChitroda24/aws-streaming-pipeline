@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 trade_simulator.py — Synthetic stock trade event generator.
 

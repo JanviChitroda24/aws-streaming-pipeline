@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 data_quality.py — Lambda: run Athena DQ checks, fail the pipeline if violations.
 

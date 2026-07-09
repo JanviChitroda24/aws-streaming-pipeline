@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 silver_vwap_5min.py — Glue Streaming: Kinesis → Silver VWAP (5-min windows).
 

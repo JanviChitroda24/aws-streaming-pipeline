@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 bronze_raw_trades.py — Glue Streaming: Kinesis → S3 Bronze Layer.
 

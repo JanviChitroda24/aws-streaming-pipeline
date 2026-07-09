@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """
 infra_check.py — Lambda: verify Kinesis stream and S3 bucket are ready.
 

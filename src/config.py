@@ -1,3 +1,4 @@
+# Author: Janvi Chitroda | github.com/JanviChitroda24
 """Centralized config — all AWS settings in one place."""
 import os
 from dotenv import load_dotenv
